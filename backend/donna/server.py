@@ -61,8 +61,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Donna services...")
     
     # Start scheduler
-    settings = get_settings()
-    scheduler = DonnaScheduler(settings)
+    scheduler = DonnaScheduler()
     scheduler.start()
     
     # Start Telegram bot
