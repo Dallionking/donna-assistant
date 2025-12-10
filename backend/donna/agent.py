@@ -205,39 +205,63 @@ def get_agent():
 
 async def chat(message: str, context: dict = None) -> str:
     """Send a message to Donna and get a response."""
-    agent = get_agent()
+    import logging
+    logger = logging.getLogger(__name__)
     
-    state = {
-        "messages": [HumanMessage(content=message)],
-        "context": context or {},
-    }
-    
-    result = await agent.ainvoke(state)
-    
-    # Get the last AI message
-    for msg in reversed(result["messages"]):
-        if isinstance(msg, AIMessage):
-            return msg.content
-    
-    return "I couldn't process that request."
+    try:
+        agent = get_agent()
+        
+        state = {
+            "messages": [HumanMessage(content=message)],
+            "context": context or {},
+        }
+        
+        logger.info(f"Donna agent processing: {message[:50]}...")
+        result = await agent.ainvoke(state)
+        
+        # Get the last AI message
+        for msg in reversed(result["messages"]):
+            if isinstance(msg, AIMessage):
+                response = msg.content
+                logger.info(f"Donna response: {response[:50]}...")
+                return response
+        
+        logger.warning("No AI message in response")
+        return "I'm Donna. I processed that, but I have nothing to say. Try being more specific."
+        
+    except Exception as e:
+        logger.error(f"Chat error: {e}", exc_info=True)
+        return f"Something went wrong on my end. I know, shocking. Error: {str(e)[:100]}"
 
 
 def chat_sync(message: str, context: dict = None) -> str:
     """Synchronous version of chat."""
-    agent = get_agent()
+    import logging
+    logger = logging.getLogger(__name__)
     
-    state = {
-        "messages": [HumanMessage(content=message)],
-        "context": context or {},
-    }
-    
-    result = agent.invoke(state)
-    
-    # Get the last AI message
-    for msg in reversed(result["messages"]):
-        if isinstance(msg, AIMessage):
-            return msg.content
-    
-    return "I couldn't process that request."
+    try:
+        agent = get_agent()
+        
+        state = {
+            "messages": [HumanMessage(content=message)],
+            "context": context or {},
+        }
+        
+        logger.info(f"Donna agent (sync) processing: {message[:50]}...")
+        result = agent.invoke(state)
+        
+        # Get the last AI message
+        for msg in reversed(result["messages"]):
+            if isinstance(msg, AIMessage):
+                response = msg.content
+                logger.info(f"Donna response (sync): {response[:50]}...")
+                return response
+        
+        logger.warning("No AI message in sync response")
+        return "I'm Donna. I processed that, but I have nothing to say. Try being more specific."
+        
+    except Exception as e:
+        logger.error(f"Chat sync error: {e}", exc_info=True)
+        return f"Something went wrong on my end. I know, shocking. Error: {str(e)[:100]}"
 
 

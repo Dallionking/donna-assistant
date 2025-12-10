@@ -22,14 +22,18 @@ from donna.models import BrainDump, DailySchedule, Project
 _client: Optional[Client] = None
 
 
-def get_supabase_client() -> Client:
+def get_supabase_client() -> Optional[Client]:
     """Get or create Supabase client."""
     global _client
     if _client is None:
         settings = get_settings()
+        # Use service key if available, otherwise fall back to anon key
+        api_key = settings.supabase_service_key or settings.supabase_anon_key
+        if not api_key:
+            return None
         _client = create_client(
             settings.supabase_url,
-            settings.supabase_service_key
+            api_key
         )
     return _client
 
@@ -41,6 +45,9 @@ def get_supabase_client() -> Client:
 async def save_brain_dump(brain_dump: BrainDump) -> str:
     """Save a brain dump to Supabase."""
     client = get_supabase_client()
+    
+    if client is None:
+        return str(brain_dump.id)  # Return ID even if not saved to DB
     
     data = {
         "id": str(brain_dump.id),
