@@ -11,28 +11,8 @@ from typing import Optional, List, Dict, Any
 
 from langchain_core.tools import tool
 
-# Google Calendar imports (will be configured with OAuth)
-# from google.oauth2.credentials import Credentials
-# from googleapiclient.discovery import build
-
 from donna.config import get_settings
-
-
-def get_calendar_service():
-    """
-    Get the Google Calendar service.
-    
-    Note: This requires OAuth setup. See DONNA.md for configuration.
-    """
-    settings = get_settings()
-    
-    # Check if credentials exist
-    if not settings.google_credentials_path.exists():
-        return None
-    
-    # TODO: Implement OAuth flow
-    # For now, return None until OAuth is configured
-    return None
+from donna.google_auth import get_calendar_service
 
 
 @tool

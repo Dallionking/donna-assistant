@@ -29,7 +29,7 @@ from donna.agent import chat
 from donna.tools.schedule import generate_daily_schedule, get_schedule_for_date
 from donna.tools.brain_dump import create_brain_dump, extract_action_items
 from donna.tools.projects import get_all_projects, get_project_prd_status
-from donna.tools.voice import generate_donna_voice, generate_morning_brief_voice
+from donna.tools.voice import generate_donna_voice, generate_morning_brief_voice, transcribe_telegram_voice
 
 # Configure logging
 logging.basicConfig(
@@ -452,24 +452,51 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle voice messages (brain dumps)."""
+    """Handle voice messages (brain dumps) with Whisper transcription."""
     if not is_authorized(update):
         await unauthorized_response(update)
         return
     
     voice = update.message.voice
     
-    # Download voice file
-    voice_file = await voice.get_file()
+    await update.message.reply_text("🎙️ Got it. Listening...")
     
-    # TODO: Transcribe with Whisper
-    # For now, acknowledge receipt
-    
-    await update.message.reply_text(
-        "Voice note received.\n\n"
-        "Transcription is coming soon. For now, just type it out. "
-        "I know, I know - but sometimes the old ways work."
-    )
+    try:
+        # Download voice file
+        voice_file = await voice.get_file()
+        
+        # Transcribe with Whisper
+        transcription = await transcribe_telegram_voice(voice_file)
+        
+        if transcription:
+            logger.info(f"Transcribed voice: {transcription[:50]}...")
+            
+            # Show the transcription
+            await update.message.reply_text(
+                f"📝 **Heard you say:**\n\n_{transcription}_",
+                parse_mode='Markdown'
+            )
+            
+            # Process as a regular message (could be brain dump, command, etc.)
+            # Send to Donna agent for processing
+            response = await chat(transcription)
+            
+            if response:
+                store_last_response(str(update.effective_user.id), response)
+                await update.message.reply_text(response)
+            
+        else:
+            await update.message.reply_text(
+                "I heard you, but I couldn't make out what you said. "
+                "Try again or just type it out."
+            )
+            
+    except Exception as e:
+        logger.error(f"Voice transcription error: {e}")
+        await update.message.reply_text(
+            "Something went wrong transcribing your voice note. "
+            "Give me a second and try again, or type it out."
+        )
 
 
 # ===========================================

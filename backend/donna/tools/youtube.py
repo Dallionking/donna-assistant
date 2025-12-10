@@ -10,21 +10,7 @@ from datetime import datetime, timedelta
 from langchain_core.tools import tool
 
 from donna.config import get_settings
-
-
-def get_youtube_service():
-    """
-    Get YouTube Data API service.
-    
-    Note: Uses same Google OAuth as Calendar.
-    """
-    settings = get_settings()
-    
-    if not settings.google_credentials_path.exists():
-        return None
-    
-    # TODO: Implement OAuth flow for YouTube
-    return None
+from donna.google_auth import get_youtube_service
 
 
 @tool

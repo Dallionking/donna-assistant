@@ -10,22 +10,7 @@ from datetime import datetime
 from langchain_core.tools import tool
 
 from donna.config import get_settings
-
-
-def get_gmail_service():
-    """
-    Get Gmail API service.
-    
-    Note: Requires OAuth setup similar to Calendar.
-    """
-    settings = get_settings()
-    
-    # Check if credentials exist
-    if not settings.google_credentials_path.exists():
-        return None
-    
-    # TODO: Implement OAuth flow for Gmail
-    return None
+from donna.google_auth import get_gmail_service
 
 
 @tool

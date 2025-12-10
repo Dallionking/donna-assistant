@@ -185,3 +185,85 @@ def sync_text_to_speech(text: str) -> Optional[bytes]:
     return loop.run_until_complete(generate_donna_voice(text))
 
 
+# ===========================================
+# WHISPER TRANSCRIPTION (Speech-to-Text)
+# ===========================================
+
+async def transcribe_audio(audio_bytes: bytes, filename: str = "audio.ogg") -> Optional[str]:
+    """
+    Transcribe audio using OpenAI Whisper API.
+    
+    Args:
+        audio_bytes: The audio data as bytes
+        filename: The original filename (helps Whisper understand format)
+    
+    Returns:
+        Transcribed text or None if failed
+    """
+    import openai
+    
+    settings = get_settings()
+    
+    if not settings.openai_api_key:
+        logger.warning("OpenAI API key not configured for Whisper")
+        return None
+    
+    try:
+        client = openai.OpenAI(api_key=settings.openai_api_key)
+        
+        # Create a file-like object from bytes
+        audio_file = io.BytesIO(audio_bytes)
+        audio_file.name = filename
+        
+        # Call Whisper API
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="text"
+        )
+        
+        logger.info(f"Transcribed audio: {transcript[:50]}...")
+        return transcript
+        
+    except Exception as e:
+        logger.error(f"Whisper transcription error: {e}")
+        return None
+
+
+async def transcribe_telegram_voice(voice_file) -> Optional[str]:
+    """
+    Transcribe a Telegram voice message using Whisper.
+    
+    Args:
+        voice_file: Telegram Voice file object
+    
+    Returns:
+        Transcribed text or None
+    """
+    try:
+        # Download the voice file
+        audio_bytes = await voice_file.download_as_bytearray()
+        
+        # Telegram voice messages are in OGG format
+        return await transcribe_audio(bytes(audio_bytes), "voice.ogg")
+        
+    except Exception as e:
+        logger.error(f"Error transcribing Telegram voice: {e}")
+        return None
+
+
+def sync_transcribe_audio(audio_bytes: bytes, filename: str = "audio.ogg") -> Optional[str]:
+    """
+    Synchronous wrapper for transcribe_audio.
+    """
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(transcribe_audio(audio_bytes, filename))
+
+
