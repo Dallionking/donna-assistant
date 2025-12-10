@@ -424,18 +424,31 @@ async def create_prd_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ===========================================
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle regular text messages."""
+    """Handle regular text messages - conversational AI."""
     if not is_authorized(update):
         await unauthorized_response(update)
         return
     
     user_message = update.message.text
+    logger.info(f"Received message: {user_message}")
     
-    # Send to Donna agent
-    response = await chat(user_message)
-    store_last_response(str(update.effective_user.id), response)
-    
-    await update.message.reply_text(response)
+    try:
+        # Send to Donna agent
+        response = await chat(user_message)
+        
+        if response:
+            store_last_response(str(update.effective_user.id), response)
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text(
+                "I'm thinking, but nothing's coming to mind. Try again?"
+            )
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        await update.message.reply_text(
+            "Something went wrong on my end. I know, shocking. "
+            "Give me a second and try again."
+        )
 
 
 async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
