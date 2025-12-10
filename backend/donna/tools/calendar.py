@@ -96,7 +96,7 @@ def create_time_block(
     Create a time block on Google Calendar.
     
     Args:
-        title: Title of the time block (e.g., "SigmaView: PRD-F-INTERFACE-STATES")
+        title: Title of the time block (e.g., "Sigmavue: PRD-F-INTERFACE-STATES")
         start_time: Start time in HH:MM format (24h)
         end_time: End time in HH:MM format (24h)
         date_str: Date in YYYY-MM-DD format (defaults to today)

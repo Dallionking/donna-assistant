@@ -225,7 +225,7 @@ For each action item, classify it as:
 - NOISE: Should be deferred, delegated, or deleted
 
 Also identify which project it relates to (if any):
-- SigmaView (trading platform)
+- Sigmavue (trading platform)
 - SSS (PRD generation)
 - RuthlessApp (productivity app)
 - Or other client projects

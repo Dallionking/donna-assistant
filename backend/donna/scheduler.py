@@ -102,7 +102,7 @@ class DonnaScheduler:
             today = datetime.now()
             brief = f"""Rise and shine. It's Donna.
 
-I've already optimized your day, checked Calendly for conflicts, and made sure SigmaView gets the attention it deserves. You're welcome.
+I've already optimized your day, checked Calendly for conflicts, and made sure Sigmavue gets the attention it deserves. You're welcome.
 
 {schedule}
 

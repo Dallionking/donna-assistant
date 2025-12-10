@@ -32,13 +32,13 @@ Donna applies the Kevin O'Leary/Steve Jobs framework:
 - **Work Ends**: 7:00 PM
 
 ### Project Priorities
-1. **SigmaView** (`/Users/dallionking/Sigmavue`) - Startup, DAILY priority
+1. **Sigmavue** (`/Users/dallionking/Sigmavue`) - Startup, DAILY priority
 2. **SSS** (`/Users/dallionking/SSS`) - Personal project
 3. **Academy** - Personal project (path TBD)
 4. **Client Projects** (`/Users/dallionking/SSS Projects`) - Rotating 2-3 per day
 
 ### Work Block Structure
-- **12:00-3:00 PM** - SigmaView (always)
+- **12:00-3:00 PM** - Sigmavue (always)
 - **3:00-3:30 PM** - Break
 - **3:30-5:00 PM** - Project rotation slot 1
 - **5:00-7:00 PM** - Project rotation slot 2

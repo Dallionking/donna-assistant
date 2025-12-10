@@ -124,7 +124,7 @@ def generate_daily_schedule(date_str: Optional[str] = None) -> str:
     
     work_blocks = template.get("work_blocks", {})
     
-    # Primary block (SigmaView)
+    # Primary block (Sigmavue)
     primary = work_blocks.get("primary", {})
     if primary:
         project_id = primary.get("project", "sigmavue")
@@ -186,7 +186,7 @@ def generate_daily_schedule(date_str: Optional[str] = None) -> str:
     
     # Top 3 Signal Tasks
     lines.append("\n## 🎯 Top 3 Signal Tasks\n")
-    lines.append("1. Complete current PRD phase (SigmaView)")
+    lines.append("1. Complete current PRD phase (Sigmavue)")
     if len(rotation_projects) > 0:
         lines.append(f"2. Progress on {rotation_projects[0]['name']}")
     if len(rotation_projects) > 1:

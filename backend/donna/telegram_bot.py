@@ -309,7 +309,7 @@ async def adjust_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     response = (
         "Fine. What do you want to change?\n\n"
         "Just tell me:\n"
-        "• 'Move SigmaView to 3pm'\n"
+        "• 'Move Sigmavue to 3pm'\n"
         "• 'Add a call at 2pm'\n"
         "• 'Skip gym today' (I'll pretend I didn't hear that)\n"
         "• 'Work on Ruthless instead of AdForge'\n\n"
@@ -513,7 +513,7 @@ async def send_morning_brief(bot: Bot, chat_id: str) -> None:
     # Build morning brief
     brief = f"""Rise and shine. It's Donna.
 
-I've already optimized your day, checked Calendly for conflicts, and made sure SigmaView gets the attention it deserves. You're welcome.
+I've already optimized your day, checked Calendly for conflicts, and made sure Sigmavue gets the attention it deserves. You're welcome.
 
 {schedule}
 

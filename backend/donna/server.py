@@ -205,7 +205,7 @@ Your project block has been moved. You're welcome.
 
 {name} canceled their call.
 
-I've already restored your original schedule. More time for SigmaView.
+I've already restored your original schedule. More time for Sigmavue.
 """
         else:
             # Other event types
