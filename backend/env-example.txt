@@ -1,0 +1,58 @@
+# Donna Personal Assistant - Environment Variables
+# Copy this file to .env and fill in your values
+
+# ===========================================
+# SUPABASE
+# ===========================================
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-role-key
+SUPABASE_ANON_KEY=your-anon-key
+
+# ===========================================
+# LLM PROVIDERS
+# ===========================================
+OPENAI_API_KEY=sk-your-openai-key
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+
+# ===========================================
+# GOOGLE APIs
+# ===========================================
+# Path to OAuth credentials JSON file
+GOOGLE_CREDENTIALS_PATH=./credentials/google_credentials.json
+# Path to token storage
+GOOGLE_TOKEN_PATH=./credentials/google_token.json
+# Calendar ID (usually 'primary' for main calendar)
+GOOGLE_CALENDAR_ID=primary
+
+# ===========================================
+# TELEGRAM
+# ===========================================
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_CHAT_ID=your-telegram-chat-id
+
+# ===========================================
+# CALENDLY
+# ===========================================
+CALENDLY_API_KEY=your-calendly-api-key
+CALENDLY_WEBHOOK_SECRET=your-webhook-signing-key
+
+# ===========================================
+# GITHUB
+# ===========================================
+GITHUB_TOKEN=ghp_your-github-token
+GITHUB_USERNAME=your-github-username
+
+# ===========================================
+# YOUTUBE
+# ===========================================
+# Uses same Google OAuth as Calendar
+
+# ===========================================
+# DONNA CONFIG
+# ===========================================
+DONNA_WORKSPACE=/Users/dallionking/Donna
+DONNA_TIMEZONE=America/New_York
+DONNA_MORNING_BRIEF_TIME=05:00
+DONNA_CALENDLY_SYNC_INTERVAL_HOURS=3
+
+

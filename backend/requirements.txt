@@ -1,0 +1,57 @@
+# Donna Personal Assistant - Backend Dependencies
+
+# Core
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# LangGraph & AI
+langgraph>=0.0.40
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-anthropic>=0.1.0
+openai>=1.10.0
+tiktoken>=0.5.2
+
+# Supabase
+supabase>=2.3.0
+vecs>=0.4.0
+
+# Google APIs
+google-api-python-client>=2.111.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# Telegram
+python-telegram-bot>=20.7
+
+# Scheduling
+apscheduler>=3.10.4
+croniter>=2.0.1
+
+# HTTP
+httpx>=0.26.0
+aiohttp>=3.9.0
+
+# Calendly
+# Note: Calendly uses REST API, no official SDK
+
+# GitHub
+PyGithub>=2.1.1
+
+# YouTube
+google-api-python-client  # Already included above
+
+# ElevenLabs (Voice)
+elevenlabs>=1.0.0
+
+# Web Server (for Render deployment)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2024.1
+structlog>=24.1.0
+rich>=13.7.0
+
