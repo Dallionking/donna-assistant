@@ -1,25 +1,32 @@
 """
 Google OAuth2 authentication for Donna.
 
-Handles authentication for:
-- Google Calendar
-- Gmail
-- YouTube Data API
+Supports two authentication modes:
+1. OAuth (local development) - Uses credentials.json + token.json
+2. Service Account (server/Render) - Uses service account JSON
 
-Usage:
+Usage (OAuth - Local):
 1. Create OAuth credentials at console.cloud.google.com
 2. Download credentials.json to backend/credentials/
 3. Run: python -m donna.google_auth
 4. Complete the OAuth flow in browser
 5. Token is saved to backend/credentials/google_token.json
+
+Usage (Service Account - Server):
+1. Create service account at console.cloud.google.com
+2. Download service account JSON
+3. Set GOOGLE_SERVICE_ACCOUNT_JSON env var with the JSON content
+4. Share your Google Calendar with the service account email
 """
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Optional, List
 
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
@@ -55,6 +62,54 @@ def get_token_path() -> Path:
     """Get path to token.json file."""
     settings = get_settings()
     return Path(settings.google_token_path)
+
+
+def get_service_account_path() -> Path:
+    """Get path to service account JSON file."""
+    settings = get_settings()
+    return Path(settings.donna_workspace) / "backend" / "credentials" / "google_service_account.json"
+
+
+def load_service_account_credentials() -> Optional[service_account.Credentials]:
+    """
+    Load Google credentials from service account.
+    
+    Checks in order:
+    1. GOOGLE_SERVICE_ACCOUNT_JSON env var (for Render)
+    2. google_service_account.json file (local)
+    
+    Returns None if no service account is configured.
+    """
+    # Check env var first (Render deployment)
+    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    
+    if sa_json:
+        try:
+            sa_info = json.loads(sa_json)
+            creds = service_account.Credentials.from_service_account_info(
+                sa_info,
+                scopes=SCOPES
+            )
+            logger.info("Loaded service account from environment variable")
+            return creds
+        except Exception as e:
+            logger.error(f"Error loading service account from env: {e}")
+    
+    # Check for local file
+    sa_path = get_service_account_path()
+    
+    if sa_path.exists():
+        try:
+            creds = service_account.Credentials.from_service_account_file(
+                str(sa_path),
+                scopes=SCOPES
+            )
+            logger.info(f"Loaded service account from {sa_path}")
+            return creds
+        except Exception as e:
+            logger.error(f"Error loading service account from file: {e}")
+    
+    return None
 
 
 def load_credentials() -> Optional[Credentials]:
@@ -159,18 +214,28 @@ def run_oauth_flow() -> Optional[Credentials]:
         return None
 
 
-def get_google_credentials() -> Optional[Credentials]:
+def get_google_credentials():
     """
-    Get Google credentials, running OAuth if needed.
+    Get Google credentials.
+    
+    Tries in order:
+    1. Service Account (for server/Render deployment)
+    2. OAuth token (for local development)
     
     Returns credentials if available, None otherwise.
     """
-    creds = load_credentials()
+    # Try service account first (works on server)
+    sa_creds = load_service_account_credentials()
+    if sa_creds:
+        return sa_creds
     
-    if creds is None:
-        logger.info("No valid credentials found. OAuth flow required.")
+    # Fall back to OAuth (works locally)
+    oauth_creds = load_credentials()
+    if oauth_creds:
+        return oauth_creds
     
-    return creds
+    logger.info("No valid credentials found. Run OAuth flow or configure service account.")
+    return None
 
 
 def get_calendar_service() -> Optional[Resource]:

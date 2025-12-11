@@ -91,9 +91,14 @@ Today: {today} | Time: {now}
 """
 
 
+def add_messages(left: list, right: list) -> list:
+    """Properly merge message lists."""
+    return left + right
+
+
 class AgentState(TypedDict):
     """State for the Donna agent graph."""
-    messages: Annotated[Sequence[BaseMessage], "The conversation messages"]
+    messages: Annotated[list, add_messages]
     context: dict  # Additional context (projects, schedule, etc.)
 
 
@@ -150,17 +155,17 @@ def create_donna_agent():
         
         return "end"
     
-    def call_model(state: AgentState) -> AgentState:
+    def call_model(state: AgentState) -> dict:
         """Call the LLM."""
         messages = state["messages"]
         
-        # Ensure system message is first
-        if not messages or not isinstance(messages[0], SystemMessage):
-            messages = [get_system_message()] + list(messages)
+        # Build message list with system message
+        all_messages = [get_system_message()] + list(messages)
         
-        response = llm_with_tools.invoke(messages)
+        response = llm_with_tools.invoke(all_messages)
         
-        return {"messages": messages + [response], "context": state.get("context", {})}
+        # Return only the new response - add_messages will merge it
+        return {"messages": [response]}
     
     # Build the graph
     workflow = StateGraph(AgentState)
