@@ -30,6 +30,7 @@ from donna.tools.schedule import generate_daily_schedule, get_schedule_for_date
 from donna.tools.brain_dump import create_brain_dump, extract_action_items
 from donna.tools.projects import get_all_projects, get_project_prd_status
 from donna.tools.voice import generate_donna_voice, generate_morning_brief_voice, transcribe_telegram_voice
+from donna.tools.calendar_sync import sync_schedule_to_calendar, clear_donna_calendar_events
 
 # Configure logging
 logging.basicConfig(
@@ -420,6 +421,56 @@ async def create_prd_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # ===========================================
+# CALENDAR SYNC COMMANDS
+# ===========================================
+
+async def sync_calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /sync_calendar command - sync schedule to Google Calendar."""
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    await update.message.reply_text("🔄 Syncing your schedule to Google Calendar...")
+    
+    try:
+        # Call the sync tool
+        result = sync_schedule_to_calendar.invoke({
+            "include_morning": True,
+            "include_work": True,
+            "include_evening": False,
+            "clear_existing": True
+        })
+        
+        store_last_response(str(update.effective_user.id), result)
+        await update.message.reply_text(result)
+        
+        # Send voice confirmation
+        await send_voice_note(update, "Your schedule has been synced to Google Calendar. All your time blocks are now recurring. You're welcome.")
+        
+    except Exception as e:
+        logger.error(f"Calendar sync error: {e}")
+        await update.message.reply_text(
+            f"❌ Failed to sync calendar. Error: {str(e)[:100]}\n\n"
+            "Make sure Google Calendar is connected."
+        )
+
+
+async def clear_calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /clear_calendar command - remove all Donna events."""
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    try:
+        result = clear_donna_calendar_events.invoke({})
+        store_last_response(str(update.effective_user.id), result)
+        await update.message.reply_text(result)
+    except Exception as e:
+        logger.error(f"Clear calendar error: {e}")
+        await update.message.reply_text(f"❌ Failed to clear calendar. Error: {str(e)[:100]}")
+
+
+# ===========================================
 # MESSAGE HANDLERS
 # ===========================================
 
@@ -574,6 +625,8 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("voice", voice_command))
     application.add_handler(CommandHandler("idea", idea_command))
     application.add_handler(CommandHandler("createprd", create_prd_command))
+    application.add_handler(CommandHandler("sync_calendar", sync_calendar_command))
+    application.add_handler(CommandHandler("clear_calendar", clear_calendar_command))
     
     # Add message handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))

@@ -32,12 +32,16 @@ from donna.tools.brain_dump import (
 from donna.tools.calendar import (
     get_today_events,
     create_time_block,
-    sync_schedule_to_calendar,
 )
 from donna.tools.schedule import (
     generate_daily_schedule,
     get_schedule_for_date,
     update_schedule,
+)
+from donna.tools.calendar_sync import (
+    sync_schedule_to_calendar,
+    clear_donna_calendar_events,
+    update_schedule_template,
 )
 
 
@@ -127,18 +131,25 @@ def create_donna_agent():
     
     # Define tools
     tools = [
+        # Project management
         get_all_projects,
         get_project_prd_status,
         scan_and_add_project,
+        # Brain dumps
         create_brain_dump,
         search_brain_dumps,
         extract_action_items,
+        # Calendar
         get_today_events,
         create_time_block,
-        sync_schedule_to_calendar,
+        # Schedule
         generate_daily_schedule,
         get_schedule_for_date,
         update_schedule,
+        # Calendar sync (recurring events)
+        sync_schedule_to_calendar,
+        clear_donna_calendar_events,
+        update_schedule_template,
     ]
     
     # Bind tools to LLM
