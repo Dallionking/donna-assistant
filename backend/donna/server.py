@@ -63,16 +63,21 @@ async def lifespan(app: FastAPI):
     global scheduler
     
     # Startup
-    logger.info("Starting Donna services...")
+    logger.info("=" * 60)
+    logger.info("STARTING DONNA SERVICES")
+    logger.info("=" * 60)
     
-    # Start scheduler
+    # Start scheduler - MUST call initialize() for scheduled jobs
     scheduler = DonnaScheduler()
+    await scheduler.initialize()  # This schedules the morning brief, etc.
     scheduler.start()
     
     # Start Telegram bot
     await start_bot()
     
-    logger.info("Donna is ready!")
+    logger.info("=" * 60)
+    logger.info("DONNA IS READY!")
+    logger.info("=" * 60)
     
     yield
     

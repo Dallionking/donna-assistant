@@ -11,7 +11,6 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from pathlib import Path
 
 from langchain_core.tools import tool
 from googleapiclient.discovery import build
@@ -170,26 +169,38 @@ def delete_donna_events(service, calendar_id: str = "primary") -> int:
 
 def get_schedule_template() -> Optional[Dict]:
     """
-    Get schedule template from Supabase, falling back to local file.
+    Get schedule template from Supabase only.
+    NO local file access - runs on server.
     """
-    # Try Supabase first
     try:
         supabase = get_supabase_client()
         if supabase:
             result = supabase.table("settings").select("*").eq("key", "weekly_template").execute()
             if result.data:
-                return json.loads(result.data[0]["value"])
+                value = result.data[0].get("value")
+                if isinstance(value, str):
+                    return json.loads(value)
+                return value
     except Exception as e:
         logger.warning(f"Could not fetch from Supabase: {e}")
     
-    # Fall back to local file
-    settings = get_settings()
-    template_path = settings.donna_workspace / "schedule" / "weekly-template.json"
-    
-    if template_path.exists():
-        return json.loads(template_path.read_text())
-    
-    return None
+    # Return default template if Supabase fails
+    return {
+        "personal_blocks": {
+            "wake": "7:00 AM",
+            "gym": {"time": "8:00 AM", "days": ["monday", "wednesday", "friday"], "duration_minutes": 90},
+            "stretch": "9:30 AM",
+            "shower": "10:00 AM",
+            "ready": "10:30 AM"
+        },
+        "work_blocks": {
+            "primary": {"start": "12:00 PM", "end": "3:00 PM", "project": "sigmavue"},
+            "break_1": {"start": "3:00 PM", "end": "3:30 PM"},
+            "rotation_1": {"start": "3:30 PM", "end": "5:00 PM"},
+            "rotation_2": {"start": "5:00 PM", "end": "7:00 PM"}
+        },
+        "evening": {"end_work": "7:00 PM", "dinner": "7:30 PM", "wind_down": "9:00 PM"}
+    }
 
 
 @tool

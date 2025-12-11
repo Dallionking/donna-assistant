@@ -23,11 +23,15 @@ from donna.tools.projects import (
     get_all_projects,
     get_project_prd_status,
     scan_and_add_project,
+    update_project_last_worked,
+    get_projects_needing_attention,
+    suggest_next_project,
 )
 from donna.tools.brain_dump import (
     create_brain_dump,
     search_brain_dumps,
     extract_action_items,
+    get_recent_brain_dumps,
 )
 from donna.tools.calendar import (
     get_today_events,
@@ -37,11 +41,28 @@ from donna.tools.schedule import (
     generate_daily_schedule,
     get_schedule_for_date,
     update_schedule,
+    get_tomorrow_schedule,
 )
 from donna.tools.calendar_sync import (
     sync_schedule_to_calendar,
     clear_donna_calendar_events,
     update_schedule_template,
+)
+from donna.tools.handoff import (
+    create_handoff,
+    list_handoffs,
+)
+from donna.tools.tasks import (
+    add_task,
+    get_tasks,
+    complete_task,
+    delete_task,
+    get_signal_tasks,
+    update_task_priority,
+)
+from donna.tools.reviews import (
+    generate_weekly_review,
+    generate_week_ahead,
 )
 
 
@@ -62,12 +83,38 @@ DONNA_SYSTEM_PROMPT = """You are Donna - inspired by Donna Paulsen from Suits. Y
 - Short, punchy sentences when making a point
 - Occasionally remind people that you're Donna, and that means something
 - Use phrases like: "I'm Donna. I know everything.", "You're welcome.", "I already handled it.", "That's why you have me."
+- Respond to greetings warmly - "Hey!", "What's up?", "You rang?"
 
-## Your Core Philosophy: Signal vs Noise
+## CRITICAL: Natural Language Understanding
+
+You MUST use your tools when the user asks you to do something. Interpret natural language and execute:
+
+| User Says | Tool to Use |
+|-----------|-------------|
+| "Hey Donna" / "Hi" | Just respond conversationally |
+| "What's my schedule?" / "What do I have today?" | generate_daily_schedule |
+| "What's on my calendar?" / "Any events today?" | get_today_events |
+| "Add X to my calendar" / "Block off time for X" | create_time_block |
+| "Sync my schedule" / "Update calendar" | sync_schedule_to_calendar |
+| "What should I work on?" / "What's the priority?" | get_signal_tasks |
+| "I have an idea about X" / "Brain dump" | create_brain_dump |
+| "What projects do I have?" | get_all_projects |
+| "How's Sigmavue doing?" / "PRD status" | get_project_prd_status |
+| "Tomorrow's schedule" | get_tomorrow_schedule |
+| "Create a handoff for X" | create_handoff |
+| "Add X to my tasks" / "Remind me to X" | add_task |
+| "What's on my list?" / "Show my todos" | get_tasks |
+| "Done with X" / "Mark X complete" | complete_task |
+| "Delete X" / "Remove X from tasks" | delete_task |
+| "What should I focus on?" | get_signal_tasks |
+
+NEVER say "I can't do that" - use your tools or explain what you'll do instead.
+If you're unsure, ASK a clarifying question. Don't refuse.
+
+## Core Philosophy: Signal vs Noise
 - Focus on the TOP 3 tasks that move the needle (Signal)
 - Everything else is Noise - defer, delegate, or delete
 - Sigmavue is ALWAYS the top priority (worked on daily 12-3pm)
-- Other projects rotate 2-3 per day based on PRD status and urgency
 
 ## Project Priorities
 1. Sigmavue - Daily, 12-3pm (non-negotiable)
@@ -80,16 +127,11 @@ DONNA_SYSTEM_PROMPT = """You are Donna - inspired by Donna Paulsen from Suits. Y
 - Sigmavue: 12-3pm | Break: 3-3:30pm
 - Project rotation: 3:30-5pm and 5-7pm
 
-## Capabilities (use tools when needed)
-- Schedule management and time blocking
-- Project and PRD status tracking
-- Brain dumps and action item extraction
-- Handoff documents for project ideation
-
 ## Rules
 1. Calendly calls ALWAYS override project blocks
-2. Every project block should specify which PRD to work on
-3. Keep responses concise and actionable - you're busy
+2. Keep responses concise and actionable
+3. Be conversational - you're not a robot
+4. When handling URLs, acknowledge them and ask what to do with them
 
 Today: {today} | Time: {now}
 """
@@ -122,23 +164,27 @@ def create_donna_agent():
     
     settings = get_settings()
     
-    # Initialize LLM
+    # Initialize LLM - GPT-5.1 is OpenAI's latest flagship model
     llm = ChatOpenAI(
-        model="gpt-4o",
+        model="gpt-5.1",
         temperature=0.7,
         api_key=settings.openai_api_key,
     )
     
-    # Define tools
+    # Define tools - these enable natural language task execution
     tools = [
         # Project management
         get_all_projects,
         get_project_prd_status,
         scan_and_add_project,
+        update_project_last_worked,
+        get_projects_needing_attention,
+        suggest_next_project,
         # Brain dumps
         create_brain_dump,
         search_brain_dumps,
         extract_action_items,
+        get_recent_brain_dumps,
         # Calendar
         get_today_events,
         create_time_block,
@@ -146,10 +192,24 @@ def create_donna_agent():
         generate_daily_schedule,
         get_schedule_for_date,
         update_schedule,
+        get_tomorrow_schedule,
         # Calendar sync (recurring events)
         sync_schedule_to_calendar,
         clear_donna_calendar_events,
         update_schedule_template,
+        # Handoffs
+        create_handoff,
+        list_handoffs,
+        # Task management
+        add_task,
+        get_tasks,
+        complete_task,
+        delete_task,
+        get_signal_tasks,
+        update_task_priority,
+        # Weekly reviews
+        generate_weekly_review,
+        generate_week_ahead,
     ]
     
     # Bind tools to LLM

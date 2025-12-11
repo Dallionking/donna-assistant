@@ -3,28 +3,51 @@ Handoff document generation tools for Donna.
 
 Creates context documents when ideating on specific projects,
 allowing seamless transition from Donna to project workspaces.
+
+All data stored in Supabase - NO local file access.
 """
 
 import json
 import re
-from pathlib import Path
+import logging
 from typing import Optional
 from datetime import datetime
+from uuid import uuid4
 
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
-from donna.config import get_settings, get_handoffs_path
-from donna.tools.projects import load_project_registry, get_project_prd_status
-from donna.tools.brain_dump import search_brain_dumps
+from donna.config import get_settings
+from donna.database import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 
-def ensure_handoff_directory(project_id: str) -> Path:
-    """Ensure the handoff directory exists for a project."""
-    handoffs_path = get_handoffs_path()
-    project_path = handoffs_path / project_id
-    project_path.mkdir(parents=True, exist_ok=True)
-    return project_path
+def get_project_from_supabase(project_name: str) -> Optional[dict]:
+    """Get project from Supabase by name or ID."""
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            return None
+        
+        # Try exact match on name
+        result = supabase.table("projects").select("*").ilike(
+            "name", project_name
+        ).limit(1).execute()
+        
+        if result.data:
+            return result.data[0]
+        
+        # Try partial match
+        result = supabase.table("projects").select("*").ilike(
+            "name", f"%{project_name}%"
+        ).limit(1).execute()
+        
+        return result.data[0] if result.data else None
+        
+    except Exception as e:
+        logger.error(f"Error fetching project: {e}")
+        return None
 
 
 @tool
@@ -44,67 +67,44 @@ def create_handoff(
         include_brain_dumps: Whether to search for related brain dumps
     
     The handoff document will include:
-    1. Current project state (from .prd-status.json)
-    2. Current PRD being worked on
-    3. Next PRD in queue
-    4. Related brain dumps (if any)
-    5. Specific action items
+    1. Current project state
+    2. Related brain dumps (if any)
+    3. Specific action items
     
     Take this document into the project's Cursor workspace
     to continue implementation.
     """
-    registry = load_project_registry()
-    
-    # Find the project
-    project = None
-    for p in registry.projects:
-        if p.id.lower() == project_name.lower() or p.name.lower() == project_name.lower():
-            project = p
-            break
-    
-    if not project:
-        return f"Project '{project_name}' not found. Available: {', '.join(p.name for p in registry.projects)}"
-    
     timestamp = datetime.now()
+    handoff_id = str(uuid4())
     
-    # Generate slug for filename
-    slug = re.sub(r'[^a-z0-9]+', '-', topic.lower()).strip('-')[:50]
-    
-    # Create handoff directory and file path
-    handoff_dir = ensure_handoff_directory(project.id)
-    filename = f"{timestamp.strftime('%Y-%m-%d')}_{slug}.md"
-    file_path = handoff_dir / filename
-    
-    # Get PRD status
-    prd_status = ""
-    if project.prd_status_path and project.path:
-        prd_status = get_project_prd_status.invoke({"project_name": project.name})
+    # Get project info
+    project = get_project_from_supabase(project_name)
     
     # Search for related brain dumps
-    related_dumps = ""
+    related_dumps = None
     if include_brain_dumps:
-        dumps_result = search_brain_dumps.invoke({"query": topic, "limit": 3})
-        if "found" in dumps_result.lower() or "##" in dumps_result:
-            related_dumps = dumps_result
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                result = supabase.table("brain_dumps").select(
+                    "id, title, content"
+                ).ilike("content", f"%{topic}%").limit(3).execute()
+                
+                if result.data:
+                    related_dumps = result.data
+        except Exception as e:
+            logger.error(f"Error searching brain dumps: {e}")
     
     # Build handoff content
     lines = [
         f"# Handoff: {topic}",
         "",
-        f"**Project**: {project.name}",
+        f"**Project**: {project_name}",
         f"**Created**: {timestamp.strftime('%A, %B %d, %Y at %I:%M %p')}",
-        f"**Path**: `{project.path}`",
-        "",
-        "---",
-        "",
-        "## Project State",
-        "",
     ]
     
-    if prd_status:
-        lines.append(prd_status)
-    else:
-        lines.append("*No PRD status available*")
+    if project and project.get("path"):
+        lines.append(f"**Path**: `{project.get('path')}`")
     
     lines.extend([
         "",
@@ -126,8 +126,9 @@ def create_handoff(
             "",
             "## Related Brain Dumps",
             "",
-            related_dumps,
         ])
+        for dump in related_dumps:
+            lines.append(f"- **{dump.get('title', 'Untitled')}**: {dump.get('content', '')[:100]}...")
     
     lines.extend([
         "",
@@ -135,49 +136,56 @@ def create_handoff(
         "",
         "## Action Items",
         "",
-        "- [ ] Review the current PRD status above",
+        "- [ ] Review the context above",
         "- [ ] Determine if this fits in an existing PRD or needs a new one",
         "- [ ] If new PRD needed, create it with the next available number",
-        f"- [ ] Update `.prd-status.json` in `{project.prd_status_path or 'docs/prds/'}`",
-        "",
-        "---",
-        "",
-        "## Next Steps",
-        "",
-        "1. Open the project in Cursor:",
-        f"   ```bash",
-        f"   cursor {project.path}",
-        f"   ```",
-        "",
-        "2. Review this handoff document",
-        "",
-        "3. Start implementing based on the PRD",
         "",
         "---",
         "",
         f"*Generated by Donna at {timestamp.strftime('%I:%M %p')}*",
     ])
     
-    # Write file
     content = "\n".join(lines)
-    with open(file_path, "w") as f:
-        f.write(content)
+    
+    # Save to Supabase
+    try:
+        supabase = get_supabase_client()
+        if supabase:
+            supabase.table("handoffs").insert({
+                "id": handoff_id,
+                "project_id": project.get("id") if project else project_name.lower(),
+                "project_name": project.get("name") if project else project_name,
+                "topic": topic,
+                "content": content,
+                "context": context,
+                "related_brain_dumps": related_dumps,
+                "created_at": timestamp.isoformat(),
+            }).execute()
+            logger.info(f"Handoff saved to Supabase: {handoff_id}")
+    except Exception as e:
+        logger.error(f"Failed to save handoff: {e}")
+    
+    project_path = project.get("path", "/path/to/project") if project else f"/path/to/{project_name}"
     
     return f"""✅ Handoff document created!
 
-**Project**: {project.name}
+**Project**: {project_name}
 **Topic**: {topic}
-**File**: `{file_path}`
+**ID**: `{handoff_id[:8]}...`
 
 ## Quick Actions
 
-1. **Open in Cursor**: `cursor {project.path}`
-2. **View handoff**: The document contains:
-   - Current PRD status
+1. **Open in Cursor**: `cursor {project_path}`
+2. **The handoff contains**:
+   - Context for the feature
    - Related brain dumps
    - Action items
 
 Take this into the project workspace to continue!
+
+---
+
+{content}
 """
 
 
@@ -192,61 +200,66 @@ def list_handoffs(project_name: Optional[str] = None, limit: int = 10) -> str:
     
     Returns list of handoff documents with dates and topics.
     """
-    handoffs_path = get_handoffs_path()
-    
-    if not handoffs_path.exists():
-        return "No handoffs created yet. Use `/handoff [project]` to create one."
-    
-    all_handoffs = []
-    
-    if project_name:
-        # Single project
-        project_dir = handoffs_path / project_name.lower()
-        if project_dir.exists():
-            all_handoffs = list(project_dir.glob("*.md"))
-    else:
-        # All projects
-        all_handoffs = list(handoffs_path.rglob("*.md"))
-    
-    if not all_handoffs:
-        return "No handoff documents found."
-    
-    # Sort by modification time (newest first)
-    all_handoffs.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-    all_handoffs = all_handoffs[:limit]
-    
-    lines = ["# Recent Handoffs\n"]
-    
-    for handoff in all_handoffs:
-        project = handoff.parent.name
-        date_part = handoff.stem.split('_')[0] if '_' in handoff.stem else "Unknown"
-        topic = handoff.stem.split('_', 1)[1] if '_' in handoff.stem else handoff.stem
-        topic = topic.replace('-', ' ').title()
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            return "Database not connected."
         
-        lines.append(f"- **{topic}** ({project})")
-        lines.append(f"  Date: {date_part}")
-        lines.append(f"  File: `{handoff}`")
-        lines.append("")
-    
-    return "\n".join(lines)
+        query = supabase.table("handoffs").select(
+            "id, project_name, topic, created_at"
+        ).order("created_at", desc=True).limit(limit)
+        
+        if project_name:
+            query = query.ilike("project_name", f"%{project_name}%")
+        
+        result = query.execute()
+        
+        if not result.data:
+            return "No handoff documents found."
+        
+        lines = ["# Recent Handoffs\n"]
+        
+        for handoff in result.data:
+            project = handoff.get("project_name", "Unknown")
+            topic = handoff.get("topic", "Untitled")
+            created = handoff.get("created_at", "")[:10]
+            
+            lines.append(f"- **{topic}** ({project})")
+            lines.append(f"  Date: {created}")
+            lines.append("")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"Error listing handoffs: {e}")
+        return f"Error: {str(e)}"
 
 
 @tool
-def get_handoff_content(file_path: str) -> str:
+def get_handoff_content(handoff_id: str) -> str:
     """
     Read the content of a handoff document.
     
     Args:
-        file_path: Path to the handoff file
+        handoff_id: ID of the handoff (or partial ID)
     
     Returns the full content of the handoff.
     """
-    path = Path(file_path)
-    
-    if not path.exists():
-        return f"Handoff not found: {file_path}"
-    
-    with open(path, "r") as f:
-        return f.read()
-
-
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            return "Database not connected."
+        
+        result = supabase.table("handoffs").select("*").ilike(
+            "id", f"{handoff_id}%"
+        ).limit(1).execute()
+        
+        if not result.data:
+            return f"Handoff not found with ID: {handoff_id}"
+        
+        handoff = result.data[0]
+        return handoff.get("content", "No content available")
+        
+    except Exception as e:
+        logger.error(f"Error getting handoff: {e}")
+        return f"Error: {str(e)}"
