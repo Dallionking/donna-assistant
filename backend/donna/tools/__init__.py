@@ -25,6 +25,20 @@ from donna.tools.schedule import (
     get_schedule_for_date,
     update_schedule,
 )
+from donna.tools.clients import (
+    add_client,
+    search_clients,
+    get_client_details,
+    list_all_clients,
+)
+from donna.tools.deals import (
+    create_deal,
+    close_deal,
+    get_active_deals,
+    log_payment,
+    get_revenue_summary,
+    get_deals_pending_payment,
+)
 
 __all__ = [
     # Projects
@@ -43,6 +57,18 @@ __all__ = [
     "generate_daily_schedule",
     "get_schedule_for_date",
     "update_schedule",
+    # Clients (CRM)
+    "add_client",
+    "search_clients",
+    "get_client_details",
+    "list_all_clients",
+    # Deals & Revenue (CRM)
+    "create_deal",
+    "close_deal",
+    "get_active_deals",
+    "log_payment",
+    "get_revenue_summary",
+    "get_deals_pending_payment",
 ]
 
 

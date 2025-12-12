@@ -64,6 +64,25 @@ from donna.tools.reviews import (
     generate_weekly_review,
     generate_week_ahead,
 )
+from donna.tools.clients import (
+    add_client,
+    search_clients,
+    get_client_details,
+    list_all_clients,
+)
+from donna.tools.deals import (
+    create_deal,
+    close_deal,
+    get_active_deals,
+    log_payment,
+    get_revenue_summary,
+    get_deals_pending_payment,
+)
+from donna.tools.calendly import (
+    get_calendly_events,
+    check_calendly_conflicts,
+    sync_calendly_invitees_as_clients,
+)
 
 
 # System prompt for Donna (Donna Paulsen personality)
@@ -107,6 +126,15 @@ You MUST use your tools when the user asks you to do something. Interpret natura
 | "Done with X" / "Mark X complete" | complete_task |
 | "Delete X" / "Remove X from tasks" | delete_task |
 | "What should I focus on?" | get_signal_tasks |
+| "Add client John" / "New client" | add_client |
+| "Who is John?" / "Tell me about client X" | get_client_details |
+| "Show my clients" / "List clients" | list_all_clients |
+| "I closed a deal with John for $5k" | close_deal |
+| "Show active deals" / "What deals do I have?" | get_active_deals |
+| "John paid $2500" / "Got payment from X" | log_payment |
+| "Revenue summary" / "How much have I made?" | get_revenue_summary |
+| "What's unpaid?" / "Pending payments" | get_deals_pending_payment |
+| "Sync Calendly contacts" | sync_calendly_invitees_as_clients |
 
 NEVER say "I can't do that" - use your tools or explain what you'll do instead.
 If you're unsure, ASK a clarifying question. Don't refuse.
@@ -210,6 +238,22 @@ def create_donna_agent():
         # Weekly reviews
         generate_weekly_review,
         generate_week_ahead,
+        # CRM - Clients
+        add_client,
+        search_clients,
+        get_client_details,
+        list_all_clients,
+        # CRM - Deals & Revenue
+        create_deal,
+        close_deal,
+        get_active_deals,
+        log_payment,
+        get_revenue_summary,
+        get_deals_pending_payment,
+        # Calendly
+        get_calendly_events,
+        check_calendly_conflicts,
+        sync_calendly_invitees_as_clients,
     ]
     
     # Bind tools to LLM

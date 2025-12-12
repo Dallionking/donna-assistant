@@ -31,6 +31,8 @@ from donna.tools.brain_dump import create_brain_dump, extract_action_items
 from donna.tools.projects import get_all_projects, get_project_prd_status
 from donna.tools.voice import generate_donna_voice, generate_morning_brief_voice, transcribe_telegram_voice
 from donna.tools.calendar_sync import sync_schedule_to_calendar, clear_donna_calendar_events
+from donna.tools.clients import add_client, search_clients, get_client_details, list_all_clients
+from donna.tools.deals import create_deal, close_deal, get_active_deals, log_payment, get_revenue_summary, get_deals_pending_payment
 
 # Configure logging
 logging.basicConfig(
@@ -123,16 +125,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "I'm Donna. I know everything.\n\n"
         "And before you ask - yes, I already know what you need. "
         "But since you're new here, let me spell it out:\n\n"
+        "**Schedule:**\n"
         "• `/schedule` - Your day. I've already optimized it.\n"
         "• `/tomorrow` - Tomorrow's plan. You're welcome.\n"
-        "• `/braindump` - Dump your thoughts. I'll make sense of them.\n"
+        "• `/approve` - Lock in the schedule.\n\n"
+        "**Projects:**\n"
         "• `/projects` - All your projects. I'm tracking them.\n"
-        "• `/prd [project]` - PRD status. I know which one you should work on.\n"
-        "• `/signal` - Your top 3 priorities. Focus on these, ignore the noise.\n"
-        "• `/approve` - Lock in the schedule I made for you.\n"
-        "• `/adjust` - Fine. Make changes. But I was probably right.\n"
+        "• `/prd [project]` - PRD status for a project.\n"
+        "• `/braindump` - Dump your thoughts.\n\n"
+        "**CRM (Clients & Deals):**\n"
+        "• `/client [name]` - Look up a client\n"
+        "• `/client add [name]` - Add new client\n"
+        "• `/clients` - List all clients\n"
+        "• `/deal [client] [amount] [type] [title]` - Close a deal\n"
+        "• `/deals` - Show active deals\n"
+        "• `/payment [client] [amount]` - Log payment received\n"
+        "• `/revenue` - Revenue summary\n"
+        "• `/pending` - Deals awaiting payment\n\n"
         "• `/voice` - Turn my last response into a voice note.\n\n"
-        "Now, what do you need? And don't waste my time - I have a lot of people to keep on track."
+        "Now, what do you need?"
     )
 
 
@@ -471,6 +482,243 @@ async def clear_calendar_command(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # ===========================================
+# CRM COMMANDS (Clients, Deals, Revenue)
+# ===========================================
+
+async def client_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /client command - add or search clients.
+    
+    Usage:
+    - /client add John Doe - Add a new client
+    - /client John - Search for a client
+    - /clients - List all clients
+    """
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    args = context.args
+    
+    if not args:
+        # Show all clients
+        try:
+            result = list_all_clients.invoke({})
+            store_last_response(str(update.effective_user.id), result)
+            try:
+                await update.message.reply_text(result, parse_mode='Markdown')
+            except Exception:
+                await update.message.reply_text(result)
+        except Exception as e:
+            logger.error(f"Client list error: {e}")
+            await update.message.reply_text("Error loading clients.")
+        return
+    
+    if args[0].lower() == "add":
+        # Add new client
+        if len(args) < 2:
+            await update.message.reply_text(
+                "Usage: `/client add [name]`\n\n"
+                "Example: `/client add John Smith`"
+            )
+            return
+        
+        name = " ".join(args[1:])
+        try:
+            result = add_client.invoke({"name": name, "source": "telegram"})
+            store_last_response(str(update.effective_user.id), result)
+            await update.message.reply_text(result)
+        except Exception as e:
+            logger.error(f"Add client error: {e}")
+            await update.message.reply_text(f"Failed to add client: {str(e)[:50]}")
+    else:
+        # Search for client
+        query = " ".join(args)
+        try:
+            result = get_client_details.invoke({"client_name": query})
+            store_last_response(str(update.effective_user.id), result)
+            try:
+                await update.message.reply_text(result, parse_mode='Markdown')
+            except Exception:
+                await update.message.reply_text(result)
+        except Exception as e:
+            logger.error(f"Client search error: {e}")
+            await update.message.reply_text(f"Error searching clients: {str(e)[:50]}")
+
+
+async def clients_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /clients command - list all clients."""
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    try:
+        result = list_all_clients.invoke({})
+        store_last_response(str(update.effective_user.id), result)
+        try:
+            await update.message.reply_text(result, parse_mode='Markdown')
+        except Exception:
+            await update.message.reply_text(result)
+    except Exception as e:
+        logger.error(f"Clients command error: {e}")
+        await update.message.reply_text("Error loading clients.")
+
+
+async def deal_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /deal command - close a deal.
+    
+    Usage: /deal [client] [amount] [type] [title]
+    Example: /deal John 5000 app_build Mobile App
+    """
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    args = context.args
+    
+    if len(args) < 3:
+        await update.message.reply_text(
+            "Usage: `/deal [client] [amount] [type] [title]`\n\n"
+            "Types: `app_build`, `consulting`, `mentorship`\n\n"
+            "Example:\n"
+            "`/deal John 5000 app_build Mobile App for Acme Corp`"
+        )
+        return
+    
+    client_name = args[0]
+    
+    try:
+        amount = float(args[1].replace("$", "").replace(",", ""))
+    except ValueError:
+        await update.message.reply_text("Invalid amount. Use a number like `5000` or `5000.00`")
+        return
+    
+    deal_type = args[2] if len(args) > 2 else "app_build"
+    title = " ".join(args[3:]) if len(args) > 3 else f"{deal_type.replace('_', ' ').title()}"
+    
+    try:
+        result = close_deal.invoke({
+            "client_name": client_name,
+            "title": title,
+            "deal_type": deal_type,
+            "amount": amount
+        })
+        store_last_response(str(update.effective_user.id), result)
+        await update.message.reply_text(result)
+        
+        # Voice celebration for closed deals
+        settings = get_settings()
+        if settings.elevenlabs_api_key and settings.elevenlabs_voice_id:
+            await send_voice_note(
+                update, 
+                f"Deal closed! {title} for ${amount:,.0f}. I love it when the money comes in."
+            )
+            
+    except Exception as e:
+        logger.error(f"Deal command error: {e}")
+        await update.message.reply_text(f"Failed to close deal: {str(e)[:50]}")
+
+
+async def deals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /deals command - show active deals."""
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    try:
+        result = get_active_deals.invoke({})
+        store_last_response(str(update.effective_user.id), result)
+        try:
+            await update.message.reply_text(result, parse_mode='Markdown')
+        except Exception:
+            await update.message.reply_text(result)
+    except Exception as e:
+        logger.error(f"Deals command error: {e}")
+        await update.message.reply_text("Error loading deals.")
+
+
+async def revenue_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /revenue command - show revenue summary."""
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    try:
+        result = get_revenue_summary.invoke({})
+        store_last_response(str(update.effective_user.id), result)
+        try:
+            await update.message.reply_text(result, parse_mode='Markdown')
+        except Exception:
+            await update.message.reply_text(result)
+    except Exception as e:
+        logger.error(f"Revenue command error: {e}")
+        await update.message.reply_text("Error calculating revenue.")
+
+
+async def payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /payment command - log a payment.
+    
+    Usage: /payment [client] [amount] [method]
+    Example: /payment John 2500 stripe
+    """
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    args = context.args
+    
+    if len(args) < 2:
+        await update.message.reply_text(
+            "Usage: `/payment [client] [amount] [method]`\n\n"
+            "Methods: `stripe`, `paypal`, `wire`, `cash`\n\n"
+            "Example: `/payment John 2500 stripe`"
+        )
+        return
+    
+    client_name = args[0]
+    
+    try:
+        amount = float(args[1].replace("$", "").replace(",", ""))
+    except ValueError:
+        await update.message.reply_text("Invalid amount.")
+        return
+    
+    method = args[2] if len(args) > 2 else "stripe"
+    
+    try:
+        result = log_payment.invoke({
+            "client_name": client_name,
+            "amount": amount,
+            "method": method
+        })
+        store_last_response(str(update.effective_user.id), result)
+        await update.message.reply_text(result)
+    except Exception as e:
+        logger.error(f"Payment command error: {e}")
+        await update.message.reply_text(f"Failed to log payment: {str(e)[:50]}")
+
+
+async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /pending command - show deals pending payment."""
+    if not is_authorized(update):
+        await unauthorized_response(update)
+        return
+    
+    try:
+        result = get_deals_pending_payment.invoke({})
+        store_last_response(str(update.effective_user.id), result)
+        try:
+            await update.message.reply_text(result, parse_mode='Markdown')
+        except Exception:
+            await update.message.reply_text(result)
+    except Exception as e:
+        logger.error(f"Pending command error: {e}")
+        await update.message.reply_text("Error loading pending deals.")
+
+
+# ===========================================
 # MESSAGE HANDLERS
 # ===========================================
 
@@ -627,6 +875,15 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("createprd", create_prd_command))
     application.add_handler(CommandHandler("sync_calendar", sync_calendar_command))
     application.add_handler(CommandHandler("clear_calendar", clear_calendar_command))
+    
+    # CRM commands
+    application.add_handler(CommandHandler("client", client_command))
+    application.add_handler(CommandHandler("clients", clients_command))
+    application.add_handler(CommandHandler("deal", deal_command))
+    application.add_handler(CommandHandler("deals", deals_command))
+    application.add_handler(CommandHandler("revenue", revenue_command))
+    application.add_handler(CommandHandler("payment", payment_command))
+    application.add_handler(CommandHandler("pending", pending_command))
     
     # Add message handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))

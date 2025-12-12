@@ -2,8 +2,10 @@
 Calendly integration tools for Donna.
 
 Handles fetching scheduled events and managing conflicts.
+Automatically creates client records from invitees.
 """
 
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, timedelta
 
@@ -11,6 +13,8 @@ import httpx
 from langchain_core.tools import tool
 
 from donna.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 CALENDLY_API_BASE = "https://api.calendly.com"
@@ -199,3 +203,172 @@ Use `/sync` to apply schedule adjustments.
 """
 
 
+async def create_client_from_calendly_invitee(
+    name: str,
+    email: str,
+    event_type: Optional[str] = None,
+    event_uri: Optional[str] = None
+) -> Optional[str]:
+    """
+    Auto-create a client record from a Calendly invitee.
+    
+    Called when a Calendly event is booked via webhook.
+    
+    Args:
+        name: Invitee's name
+        email: Invitee's email
+        event_type: Type of event booked
+        event_uri: Calendly event URI for reference
+    
+    Returns:
+        Client ID if created, None if already exists or error
+    """
+    from donna.database import search_clients, save_client
+    
+    # Check if client already exists
+    existing = await search_clients(email)
+    if existing:
+        logger.info(f"Client already exists: {name} ({email})")
+        return existing[0].get('id')
+    
+    # Also check by name
+    existing_by_name = await search_clients(name)
+    if existing_by_name:
+        # Check if email matches or is similar
+        for c in existing_by_name:
+            if c.get('email') == email:
+                logger.info(f"Client already exists (by name match): {name}")
+                return c.get('id')
+    
+    # Create new client
+    notes = f"Booked via Calendly"
+    if event_type:
+        notes += f" - {event_type}"
+    
+    client_data = {
+        "name": name,
+        "email": email,
+        "source": "calendly",
+        "notes": notes,
+        "first_contact": datetime.now().isoformat(),
+        "created_at": datetime.now().isoformat(),
+    }
+    
+    client_id = await save_client(client_data)
+    
+    if client_id:
+        logger.info(f"Auto-created client from Calendly: {name} ({email})")
+    
+    return client_id
+
+
+def sync_create_client_from_calendly(
+    name: str,
+    email: str,
+    event_type: Optional[str] = None
+) -> Optional[str]:
+    """Synchronous wrapper for create_client_from_calendly_invitee."""
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(
+        create_client_from_calendly_invitee(name, email, event_type)
+    )
+
+
+@tool
+def sync_calendly_invitees_as_clients() -> str:
+    """
+    Sync all Calendly invitees as clients.
+    
+    Fetches recent Calendly events and creates client records
+    for any invitees not already in the system.
+    
+    Returns:
+        Summary of clients created/found
+    """
+    settings = get_settings()
+    
+    if not settings.calendly_api_key:
+        return "⚠️ Calendly not configured. Add CALENDLY_API_KEY to .env"
+    
+    try:
+        headers = get_calendly_headers()
+        created = 0
+        existing = 0
+        
+        with httpx.Client() as client:
+            # Get current user
+            user_response = client.get(
+                f"{CALENDLY_API_BASE}/users/me",
+                headers=headers
+            )
+            
+            if user_response.status_code != 200:
+                return f"Error authenticating with Calendly"
+            
+            user_uri = user_response.json()["resource"]["uri"]
+            
+            # Get events from last 30 days
+            now = datetime.now()
+            min_time = (now - timedelta(days=30)).isoformat() + "Z"
+            max_time = (now + timedelta(days=30)).isoformat() + "Z"
+            
+            events_response = client.get(
+                f"{CALENDLY_API_BASE}/scheduled_events",
+                headers=headers,
+                params={
+                    "user": user_uri,
+                    "min_start_time": min_time,
+                    "max_start_time": max_time,
+                }
+            )
+            
+            if events_response.status_code != 200:
+                return f"Error fetching events"
+            
+            events = events_response.json().get("collection", [])
+            
+            for event in events:
+                event_type = event.get("name", "Call")
+                event_uri = event.get("uri", "")
+                
+                # Get invitees
+                try:
+                    inv_response = client.get(
+                        f"{event_uri}/invitees",
+                        headers=headers
+                    )
+                    
+                    if inv_response.status_code == 200:
+                        invitees = inv_response.json().get("collection", [])
+                        
+                        for invitee in invitees:
+                            name = invitee.get("name", "Unknown")
+                            email = invitee.get("email", "")
+                            
+                            if email:
+                                result = sync_create_client_from_calendly(
+                                    name, email, event_type
+                                )
+                                if result:
+                                    created += 1
+                                else:
+                                    existing += 1
+                except Exception as e:
+                    logger.error(f"Error getting invitees: {e}")
+        
+        return f"""# Calendly Sync Complete
+
+- **New clients created**: {created}
+- **Already in system**: {existing}
+
+All your Calendly contacts are now tracked as clients."""
+        
+    except Exception as e:
+        return f"Error syncing Calendly: {str(e)}"

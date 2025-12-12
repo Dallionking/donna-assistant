@@ -210,6 +210,200 @@ async def search_memory(query: str, limit: int = 10) -> List[Dict[str, Any]]:
 
 
 # ===========================================
+# CLIENTS
+# ===========================================
+
+async def save_client(client_data: Dict[str, Any]) -> Optional[str]:
+    """Save a new client to Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    result = client.table("clients").insert(client_data).execute()
+    return result.data[0]["id"] if result.data else None
+
+
+async def get_client_by_id(client_id: str) -> Optional[Dict[str, Any]]:
+    """Get a client by ID."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    result = client.table("clients").select("*").eq("id", client_id).single().execute()
+    return result.data if result.data else None
+
+
+async def search_clients(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Search clients by name, email, or company."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    result = client.table("clients")\
+        .select("*")\
+        .or_(f"name.ilike.%{query}%,email.ilike.%{query}%,company.ilike.%{query}%")\
+        .order("created_at", desc=True)\
+        .limit(limit)\
+        .execute()
+    
+    return result.data if result.data else []
+
+
+async def get_all_clients() -> List[Dict[str, Any]]:
+    """Get all clients."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    result = client.table("clients").select("*").order("created_at", desc=True).execute()
+    return result.data if result.data else []
+
+
+# ===========================================
+# DEALS
+# ===========================================
+
+async def save_deal(deal_data: Dict[str, Any]) -> Optional[str]:
+    """Save a new deal to Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    result = client.table("deals").insert(deal_data).execute()
+    return result.data[0]["id"] if result.data else None
+
+
+async def update_deal(deal_id: str, updates: Dict[str, Any]) -> bool:
+    """Update an existing deal."""
+    client = get_supabase_client()
+    if not client:
+        return False
+    
+    result = client.table("deals").update(updates).eq("id", deal_id).execute()
+    return bool(result.data)
+
+
+async def get_deal_by_id(deal_id: str) -> Optional[Dict[str, Any]]:
+    """Get a deal by ID with client info."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    result = client.table("deals")\
+        .select("*, clients(*)")\
+        .eq("id", deal_id)\
+        .single()\
+        .execute()
+    
+    return result.data if result.data else None
+
+
+async def get_deals_by_status(status: str) -> List[Dict[str, Any]]:
+    """Get all deals with a specific status."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    result = client.table("deals")\
+        .select("*, clients(name, email, company)")\
+        .eq("status", status)\
+        .order("created_at", desc=True)\
+        .execute()
+    
+    return result.data if result.data else []
+
+
+async def get_active_deals() -> List[Dict[str, Any]]:
+    """Get all active deals (closed or in_progress)."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    result = client.table("deals")\
+        .select("*, clients(name, email, company)")\
+        .in_("status", ["closed", "in_progress"])\
+        .order("created_at", desc=True)\
+        .execute()
+    
+    return result.data if result.data else []
+
+
+async def get_deals_by_client(client_id: str) -> List[Dict[str, Any]]:
+    """Get all deals for a specific client."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    result = client.table("deals")\
+        .select("*")\
+        .eq("client_id", client_id)\
+        .order("created_at", desc=True)\
+        .execute()
+    
+    return result.data if result.data else []
+
+
+# ===========================================
+# PAYMENTS
+# ===========================================
+
+async def save_payment(payment_data: Dict[str, Any]) -> Optional[str]:
+    """Record a new payment."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    result = client.table("payments").insert(payment_data).execute()
+    return result.data[0]["id"] if result.data else None
+
+
+async def get_payments_for_deal(deal_id: str) -> List[Dict[str, Any]]:
+    """Get all payments for a deal."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    result = client.table("payments")\
+        .select("*")\
+        .eq("deal_id", deal_id)\
+        .order("date", desc=True)\
+        .execute()
+    
+    return result.data if result.data else []
+
+
+async def get_total_payments_for_deal(deal_id: str) -> float:
+    """Get total amount paid for a deal."""
+    payments = await get_payments_for_deal(deal_id)
+    return sum(float(p.get("amount", 0)) for p in payments)
+
+
+async def get_revenue_summary() -> Dict[str, Any]:
+    """Get revenue summary across all deals."""
+    client = get_supabase_client()
+    if not client:
+        return {"total": 0, "pending": 0, "paid": 0}
+    
+    # Get all deals
+    deals_result = client.table("deals").select("amount, payment_status, status").execute()
+    deals = deals_result.data if deals_result.data else []
+    
+    # Get all payments
+    payments_result = client.table("payments").select("amount").execute()
+    payments = payments_result.data if payments_result.data else []
+    
+    total_deal_value = sum(float(d.get("amount", 0) or 0) for d in deals if d.get("status") in ["closed", "in_progress", "completed"])
+    total_paid = sum(float(p.get("amount", 0) or 0) for p in payments)
+    
+    return {
+        "total_deal_value": total_deal_value,
+        "total_paid": total_paid,
+        "pending": total_deal_value - total_paid,
+        "deal_count": len([d for d in deals if d.get("status") in ["closed", "in_progress", "completed"]]),
+    }
+
+
+# ===========================================
 # SCHEMA SETUP
 # ===========================================
 
@@ -286,6 +480,64 @@ CREATE TABLE IF NOT EXISTS calendly_events (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ===========================================
+-- CRM TABLES (Clients, Deals, Payments)
+-- ===========================================
+
+-- Clients table
+CREATE TABLE IF NOT EXISTS clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    company TEXT,
+    source TEXT,  -- "calendly", "referral", "instagram", etc.
+    first_contact TIMESTAMPTZ DEFAULT NOW(),
+    notes TEXT,
+    embedding VECTOR(1536),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Deals/Contracts table
+CREATE TABLE IF NOT EXISTS deals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id),
+    project_id TEXT REFERENCES projects(id),
+    title TEXT NOT NULL,
+    type TEXT,  -- "app_build", "consulting", "mentorship"
+    amount DECIMAL(10,2),
+    status TEXT DEFAULT 'prospect',  -- "prospect", "negotiating", "closed", "in_progress", "completed", "cancelled"
+    payment_status TEXT DEFAULT 'pending',  -- "pending", "partial", "paid"
+    start_date DATE,
+    end_date DATE,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    closed_at TIMESTAMPTZ
+);
+
+-- Payments table
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    deal_id UUID REFERENCES deals(id),
+    amount DECIMAL(10,2),
+    date TIMESTAMPTZ DEFAULT NOW(),
+    method TEXT,  -- "stripe", "paypal", "wire", "cash"
+    notes TEXT
+);
+
+-- Add client relationship to projects
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id);
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS deal_id UUID REFERENCES deals(id);
+
+-- Add context to memory for better recall
+ALTER TABLE memory ADD COLUMN IF NOT EXISTS context_type TEXT;  -- "client", "deal", "project", "general"
+ALTER TABLE memory ADD COLUMN IF NOT EXISTS related_id UUID;
+
+-- Index for clients vector search
+CREATE INDEX IF NOT EXISTS clients_embedding_idx 
+ON clients USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
 -- Row Level Security (RLS) policies
 -- Note: For a personal assistant, you might not need RLS
 -- but it's good practice for future multi-user support
@@ -296,6 +548,9 @@ ALTER TABLE daily_schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE calendly_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Create policies (allow all for service role)
 CREATE POLICY "Allow all for service role" ON brain_dumps FOR ALL USING (true);
@@ -303,6 +558,9 @@ CREATE POLICY "Allow all for service role" ON daily_schedules FOR ALL USING (tru
 CREATE POLICY "Allow all for service role" ON projects FOR ALL USING (true);
 CREATE POLICY "Allow all for service role" ON memory FOR ALL USING (true);
 CREATE POLICY "Allow all for service role" ON calendly_events FOR ALL USING (true);
+CREATE POLICY "Allow all for service role" ON clients FOR ALL USING (true);
+CREATE POLICY "Allow all for service role" ON deals FOR ALL USING (true);
+CREATE POLICY "Allow all for service role" ON payments FOR ALL USING (true);
 """
 
 

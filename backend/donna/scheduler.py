@@ -22,7 +22,7 @@ from telegram import Bot
 
 from donna.config import get_settings
 from donna.tools.schedule import generate_daily_schedule
-from donna.tools.voice import text_to_speech, clean_text_for_tts
+from donna.tools.voice import text_to_speech, prepare_text_for_speech
 
 # Configure logging
 logging.basicConfig(
@@ -220,7 +220,7 @@ Focus for 90 minutes. You got this.
                 # Voice note
                 if self.settings.elevenlabs_api_key and self.settings.elevenlabs_voice_id:
                     try:
-                        clean_review = clean_text_for_tts(review)
+                        clean_review = prepare_text_for_speech(review)
                         voice_script = f"Here's your weekly review. {clean_review[:1000]}"  # Limit length
                         
                         audio_bytes = await text_to_speech(voice_script)
@@ -259,7 +259,7 @@ Focus for 90 minutes. You got this.
                 # Voice note
                 if self.settings.elevenlabs_api_key and self.settings.elevenlabs_voice_id:
                     try:
-                        clean_preview = clean_text_for_tts(preview)
+                        clean_preview = prepare_text_for_speech(preview)
                         voice_script = f"Here's what's coming up this week. {clean_preview[:1000]}"
                         
                         audio_bytes = await text_to_speech(voice_script)
@@ -368,7 +368,7 @@ Don't be late. I hate late.
                 if self.settings.elevenlabs_api_key and self.settings.elevenlabs_voice_id:
                     try:
                         # Clean text for TTS
-                        clean_schedule = clean_text_for_tts(schedule)
+                        clean_schedule = prepare_text_for_speech(schedule)
                         voice_script = f"Rise and shine. It's Donna. I've already optimized your day. {clean_schedule}. Don't be late. I hate late."
                         
                         audio_bytes = await text_to_speech(voice_script)
@@ -465,7 +465,7 @@ Good night. Don't make me come find you in the morning.
                 # Voice note for evening summary
                 if self.settings.elevenlabs_api_key and self.settings.elevenlabs_voice_id:
                     try:
-                        clean_schedule = clean_text_for_tts(tomorrow_schedule)
+                        clean_schedule = prepare_text_for_speech(tomorrow_schedule)
                         voice_script = f"Alright, that's enough for today. I've already planned tomorrow. {clean_schedule}. Good night."
                         
                         audio_bytes = await text_to_speech(voice_script)
